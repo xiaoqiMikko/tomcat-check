@@ -43,8 +43,13 @@ CONDITIONS = {
     "CVE-2026-59084": ("CLUSTER", "仅当启用集群通信的 EncryptInterceptor"),
     "CVE-2026-55955": ("CLUSTER", "仅当启用集群通信的 EncryptInterceptor"),
     "CVE-2026-34487": ("CLUSTER", "仅当启用 Kubernetes / 云环境的集群成员发现"),
-    "CVE-2026-29145": ("TLS", "仅当启用 OpenSSL + OCSP 校验"),
-    "CVE-2026-29146": ("TLS", "仅当启用 OpenSSL + OCSP 校验"),
+    "CVE-2026-29145": ("TLS", "仅当启用 CLIENT_CERT 认证并关闭了 OCSP soft-fail"),
+    # 🔴 29146 原先被我标成「OpenSSL + OCSP」—— 错的。它的官方标题是
+    #    "EncryptInterceptor vulnerable to padding oracle attack by default",是集群组件。
+    #    错因:解析 bug 让它挂上了 CVE-2026-34486 的标题,我照着那个错标题标的条件。
+    "CVE-2026-29146": ("CLUSTER", "仅当启用集群通信的 EncryptInterceptor(默认用 CBC)"),
+    "CVE-2026-34486": ("CLUSTER", "仅当启用集群通信的 EncryptInterceptor"),
+    "CVE-2026-32990": ("TLS", "仅当依赖严格 SNI 检查(hostName/SNI 大小写差异可绕过)"),
     "CVE-2026-34500": ("TLS", "仅当使用 FFM/panama OpenSSL(需 JDK22+,9.0 线不适用)"),
     "CVE-2026-53434": ("TLS", "仅当配置了 CRL 且配置无效"),
     "CVE-2026-24734": ("TLS", "仅当启用 OCSP 校验"),
@@ -67,6 +72,8 @@ EXCLUDE_FROM_EMBED = {
     "CVE-2026-59084": ("EncryptInterceptor", "集群组件,在 tomcat-tribes.jar,内嵌版不含"),
     "CVE-2026-55955": ("EncryptInterceptor", "集群组件,在 tomcat-tribes.jar,内嵌版不含"),
     "CVE-2026-34487": ("CloudMembershipService", "集群组件,在 tomcat-tribes.jar,内嵌版不含"),
+    "CVE-2026-29146": ("EncryptInterceptor", "集群组件,在 tomcat-tribes.jar,内嵌版不含"),
+    "CVE-2026-34486": ("EncryptInterceptor", "集群组件,在 tomcat-tribes.jar,内嵌版不含"),
     "CVE-2026-34500": ("panama", "FFM/panama OpenSSL 专属,tomcat-embed-* 内无 panama 类"),
     # 🔴 真实构件复验时才发现:官方标题写明 "for FFM Connector"。
     #    实测 9.0.118 / 10.1.54 / 11.0.21 三条线的 embed-core 内 panama 类均为 0 个
@@ -111,7 +118,15 @@ def parse_official(html, line):
         plain = re.sub(r"\s+", " ", plain).strip()
 
         m_hdr = re.search(r"<strong>\s*(Low|Moderate|Important|Critical)\s*:\s*(.+?)\s*</strong>", b, re.S)
-        m_cve = re.search(r"(CVE-\d{4}-\d{4,7})", b)
+        # 🔴 本条的 CVE 编号只能到 </strong> **之后**去找。
+        #    标题里可以嵌另一个 CVE 的链接,例如:
+        #      <strong>Moderate: The fix for <a>CVE-2025-66614</a> was incomplete</strong>
+        #      <a>CVE-2026-32990</a>
+        #    在整块里找「第一个 CVE」会取到标题里嵌的那个旧编号,后果不是少一条,是
+        #    **张冠李戴** —— 这条的标题/描述/评级会被挂到别的编号上,且看起来完全正常。
+        #    (实际发生过:CVE-2026-29146 挂上了 CVE-2026-34486 的标题和描述,
+        #     同时 32990 / 34486 两条整个消失。发文前事实复核才抓到。)
+        m_cve = re.search(r"(CVE-\d{4}-\d{4,7})", b[m_hdr.end():]) if m_hdr else None
         if m_hdr and m_cve:
             cve = m_cve.group(1)
             title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m_hdr.group(2))).strip()
@@ -189,6 +204,31 @@ for cve in sorted(y):
                  "pkgs": sorted(set(p for p in pkgs if p)), "gh_ranges": gh_ranges,
                  "alerts": alerts})
     print("  %s %-10s → %-10s %s" % (cve, o["sev"], gh_sev or "无", "" if alerts else "🔴Dependabot不报"))
+
+# ASSERT 7 ⭐ 解析完整性交叉校验 —— 用**第二个正则口径**独立数一遍
+#
+# 🔴 由来:主口径原先在整个 <p> 块里找「第一个 CVE」,而标题里可以嵌另一个 CVE 的链接
+#    (<strong>Moderate: The fix for <a>CVE-2025-66614</a> was incomplete</strong> <a>CVE-2026-32990</a>)。
+#    后果不是少一条,是**张冠李戴**:CVE-2026-29146 挂上了 CVE-2026-34486 的标题和描述,
+#    我照着那个错标题给它标了「OCSP」触发条件(真身是 EncryptInterceptor),
+#    同时 32990 / 34486 两条整个消失 —— 而生成、测试、真实构件复验**全部照常通过**。
+#    是发文前的事实复核撞见条目数对不上才挖出来的。
+#
+# 第二口径要求 </strong> 紧跟 <a>CVE</a>,与主口径独立。两者数量必须一致。
+_alt = set()
+for _ln in LINES:
+    _h = fetch("https://tomcat.apache.org/security-%s.html" % _ln)
+    for _m in re.finditer(
+            r"</strong>\s*<a[^>]*>\s*(CVE-\d{4}-\d{4,7})", _h, re.S):
+        _alt.add(_m.group(1))
+_alt26 = {c for c in _alt if c.startswith("CVE-%s" % YEAR)}
+_mine = set(y)
+print("\nASSERT7 解析完整性:主口径 %d 条,第二口径 %d 条" % (len(_mine), len(_alt26)))
+if _mine != _alt26:
+    print("  只在主口径:%s" % sorted(_mine - _alt26))
+    print("  只在二口径:%s" % sorted(_alt26 - _mine))
+assert _mine == _alt26, (
+    "🔴 ASSERT7 失败:两个解析口径得到的 CVE 集合不一致 —— 极可能又是标题里嵌了别的 CVE 编号")
 
 # ASSERT 2:必须有条目同时拿到两侧评级,否则合并逻辑没生效
 both = [r for r in rows if r["gh_sev"]]

@@ -86,12 +86,38 @@ class CveTableTest {
     @Test
     @DisplayName("🔴 集群/示例类条目必须标为「内嵌版不适用」——否则会吓唬 Spring Boot 用户")
     void embedExclusions() {
-        for (String id : List.of("CVE-2026-59084", "CVE-2026-55955",
-                "CVE-2026-34487", "CVE-2026-50229", "CVE-2026-66299")) {
+        for (String id : List.of("CVE-2026-59084", "CVE-2026-55955", "CVE-2026-34487",
+                "CVE-2026-29146", "CVE-2026-34486", "CVE-2026-50229", "CVE-2026-66299")) {
             List<Cve> l = byId(id);
             assertFalse(l.isEmpty(), id + " 不在表里");
             assertFalse(l.get(0).embedApplicable(), id + " 应标为内嵌版不适用");
             assertFalse(l.get(0).excludeReason().isEmpty(), id + " 缺不适用原因");
+        }
+    }
+
+    @Test
+    @DisplayName("🔴 条目不能张冠李戴:标题/描述里不该出现本条自己的编号")
+    void noSelfReference() {
+        // 由来:官方页面上有一类标题长这样 ——
+        //   "The fix for CVE-2026-29146 allowed the bypass of the EncryptInterceptor"  CVE-2026-34486
+        // 生成脚本一度在整块里找「第一个 CVE」,于是把这条的标题挂到了 CVE-2026-29146 上。
+        // 结果是 29146 的标题里出现它自己的编号 —— 这正是错配的指纹。
+        for (Cve c : CveTable.all()) {
+            assertFalse(c.title().contains(c.id()),
+                    c.id() + " 的标题里出现了它自己的编号,极可能挂错了条目:" + c.title());
+            assertFalse(c.desc().contains(c.id()),
+                    c.id() + " 的描述里出现了它自己的编号,极可能挂错了条目");
+        }
+    }
+
+    @Test
+    @DisplayName("🔴 集群类条目必须同时进排除清单 —— 两处标注不一致就是有一处忘了改")
+    void clusterEntriesAreExcluded() {
+        for (Cve c : CveTable.all()) {
+            if ("CLUSTER".equals(c.condKind())) {
+                assertFalse(c.embedApplicable(),
+                        c.id() + " 标了 CLUSTER 却没进排除清单(EXCLUDE_FROM_EMBED)");
+            }
         }
     }
 

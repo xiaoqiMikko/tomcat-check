@@ -15,7 +15,7 @@
 
 **二、有些条目进不了 Dependabot 的告警。**
 
-2026 年 Tomcat 公布了 27 条 CVE,其中一部分因为两种机制不会出现在 Spring Boot 项目的告警里:
+2026 年 Tomcat 公布了 29 条 CVE,其中一部分因为两种机制不会出现在 Spring Boot 项目的告警里:
 
 | 机制 | 说明 |
 |---|---|
@@ -33,7 +33,7 @@
 | 依据 | **默认配置下的实际可利用性** | 向量机械计算,不看你开没开那个功能 |
 | 在哪看 | `tomcat.apache.org/security-9.html` | Dependabot 直接推送给你 |
 
-27 条里有 **17 条两套评级差 2 级以上**,最极端的 CVE-2026-41293:官方 **Low**,GitHub **critical CVSS 9.8**。
+29 条里有 **17 条两套评级差 2 级以上**,最极端的 CVE-2026-41293:官方 **Low**,GitHub **critical CVSS 9.8**。
 
 > **这不是谁报错了。** 两套体系测量的本来就是不同的东西。
 > 但要判断「该不该现在就升」,你需要同时看到它们 —— 以及你有没有开那个功能。
@@ -70,7 +70,7 @@ java -jar tomcat-check.jar target/lib
 ## 🔴 请这样读它的输出
 
 - **「命中」= 你的版本落在官方 Affects 区间内**,不等于「已被利用」,也不等于「必然可利用」。
-  27 条里只有少数是默认配置即暴露,其余需要你显式开启某个功能(RewriteValve、DIGEST 认证、
+  29 条里只有少数是默认配置即暴露,其余需要你显式开启某个功能(RewriteValve、DIGEST 认证、
   AJP、WebDAV、集群通信……)。**请逐条对照触发条件。**
 - **「Dependabot 不会告警」不是说 GitHub 失职。** `unreviewed` 是正常流程状态。
 - **判定表只覆盖 2026 年公布的 CVE。** 没有命中不等于你的版本没问题。
@@ -84,8 +84,13 @@ java -jar tomcat-check.jar target/lib
 - `https://tomcat.apache.org/security-{9,10,11}.html` —— 官方评级、标题、描述原文、影响区间
 - GitHub Advisory API —— GitHub 评级、CVSS、`type`、受影响 Maven 坐标
 
-生成过程带 **6 条断言**,任一不满足就中止、不写文件。其中两条值得单说:
+生成过程带 **7 条断言**,任一不满足就中止、不写文件。其中三条值得单说:
 
+- **ASSERT7(解析完整性)**:用第二个独立的正则口径再数一遍条目,两边集合必须完全相同。
+  由来是一类很隐蔽的错配 —— 官方页面上有的标题里**嵌着另一个 CVE 的链接**:
+  `<strong>Moderate: The fix for <a>CVE-2025-66614</a> was incomplete</strong> <a>CVE-2026-32990</a>`。
+  在整块里找「第一个 CVE」会取到标题里嵌的那个旧编号,后果不是少一条,是**张冠李戴**:
+  一条 CVE 挂上了另一条的标题和描述,而生成、测试、真实构件复验**全部照常通过**。
 - **ASSERT3(配对方向)**:官方页面里 `Affects:` 行紧挨着**下一条** CVE 的标题,
   极容易配对到错误的那一条 —— 错了会得到一张「看起来完全正常但整体错位一格」的表。
   用 GitHub 的 `first_patched_version` 交叉校验,开发时**真的靠它抓到过一次错位**。
@@ -105,7 +110,7 @@ python tools/gen_rules.py
 mvn clean package     # → target/tomcat-check.jar
 ```
 
-32 个测试。运行时零依赖,JUnit 仅测试期。
+34 个测试。运行时零依赖,JUnit 仅测试期。
 
 ## 许可
 
