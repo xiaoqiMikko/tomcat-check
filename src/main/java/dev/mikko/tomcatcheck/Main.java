@@ -58,6 +58,11 @@ public final class Main {
     }
 
     private static void usage(PrintStream out) throws UnsupportedEncodingException {
+        out.println("tomcat-check - Tomcat / Spring Boot embedded Tomcat CVE checker");
+        // 🔴 这一行必须是纯 ASCII:控制台 chcp 与 Java 认定的编码不一致时中文会全糊,
+        //    而用户恰恰是从这里才知道有 --utf8 这个开关。糊掉的帮助 = 没有帮助。
+        out.println("  (Chinese text garbled? re-run with --utf8)");
+        out.println();
         out.println("tomcat-check —— Tomcat / Spring Boot 内嵌 Tomcat 的 CVE 排查");
         out.println();
         out.println("  用法:java -jar tomcat-check.jar [选项] <jar 或目录> ...");
