@@ -64,6 +64,21 @@ public final class Scanner {
     private final List<Artifact> found = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
 
+    /**
+     * 有多少个文件是「读不动」的(不是 zip / 截断 / IO 失败)。
+     *
+     * <p>🔴 它存在的理由是退出码:留痕是给人看的,而 CI 与脚本看的是退出码 ——
+     * 少了它,「我没能读它」在自动化里等于「通过」(2026-09-09 加)。
+     * <p>🔴 用计数器而不是去匹配告警文案:文案改一个字,匹配式判据就安静失效了。
+     */
+    private int unreadable;
+
+    /** 读不动的文件数 —— 大于 0 时退出码不许是 0。 */
+    public int unreadableCount() {
+        return unreadable;
+    }
+
+
     public List<Artifact> artifacts() {
         return found;
     }
@@ -86,7 +101,8 @@ public final class Scanner {
                         try {
                             scanArchive(f);
                         } catch (IOException e) {
-                            warnings.add("读取失败 " + f + ":" + e.getMessage());
+                            unreadable++;
+            warnings.add("读取失败 " + f + ":" + e.getMessage());
                         }
                     }
                     return FileVisitResult.CONTINUE;
@@ -136,6 +152,7 @@ public final class Scanner {
         record0(file.toString(), file.getFileName().toString(), bytes);
 
         if (!looksLikeZip(bytes)) {
+            unreadable++;
             warnings.add("这个文件读不动,不是有效的 zip/jar:" + file
                     + "(可能是截断、加密,或其实是个 HTML 错误页)"
                     + " —— 🔴 **这不等于「里面没有 Tomcat」**");
@@ -169,6 +186,7 @@ public final class Scanner {
         //    ☠️ 2026-09-08 实测:魔数校验只挡住一半 —— PK 03 04 开头但**内容截断**的文件
         //    魔数是对的、ZipInputStream 也不抛异常,只是零条目。少了这一层它照样静默通过。
         if (entries == 0 && !isEmptyZip(bytes)) {
+            unreadable++;
             warnings.add("这个文件魔数像 zip,但一个条目都解不出来(多半是截断或下载不全):" + file
                     + " —— 🔴 **这不等于「里面没有 Tomcat」**");
             return;
