@@ -59,6 +59,11 @@ public final class Scanner {
         public boolean cluster() {
             return artifact.equals("tomcat-tribes") || artifact.equals("tomcat-catalina-ha");
         }
+
+        /** 内嵌形态的 WebSocket 实现在不在 —— 决定 WEBSOCKET 类 CVE 对本次扫描是否适用。 */
+        public boolean websocket() {
+            return artifact.equals("tomcat-embed-websocket");
+        }
     }
 
     private final List<Artifact> found = new ArrayList<>();

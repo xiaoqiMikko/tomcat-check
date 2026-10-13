@@ -15,15 +15,19 @@
 
 **二、有些条目进不了 Dependabot 的告警。**
 
-2026 年 Tomcat 公布了 29 条 CVE,其中一部分因为两种机制不会出现在 Spring Boot 项目的告警里:
+截至 2026-10-13,Tomcat 官方安全页上 2026 年的 CVE 有 51 条,其中 34 条因为下面两种机制不会出现在 Spring Boot 项目的告警里(`unreviewed` 29 条,坐标对不上 5 条):
 
 | 机制 | 说明 |
 |---|---|
 | advisory 是 `unreviewed` | GitHub 只用 `reviewed` 的 advisory 做 Dependabot 告警。`unreviewed` 是 NVD 自动导入、尚未人工确认受影响包的**正常流程状态** |
 | 坐标对不上 | advisory 挂在 `org.apache.tomcat:tomcat-coyote` 等坐标下,而 Spring Boot 的依赖树里只有 `tomcat-embed-core` / `-el` / `-websocket` |
 
-实际效果:**一个内嵌 Tomcat 9.0.118 的 Spring Boot 应用,Dependabot 面板全绿,
-本工具会报出 4 条命中**,其中一条是默认配置即暴露。
+实际效果(2026-10-13 用 Central 上的真 jar 实跑):**Spring Boot 3.5.16 自带的
+`tomcat-embed-core` 10.1.55 + `tomcat-embed-websocket` 10.1.55,本工具报出 25 条命中,
+其中 22 条进不了 Dependabot 告警**;默认配置即暴露的是 1 条,其余都带前提,请逐条看触发条件。
+
+> 这些数字会变:GitHub 随时可能把 `unreviewed` 的条目转成 `reviewed`。
+> 重新生成判定表(见下文)就能拿到当天的状态。
 
 **三、两套评级体系口径不同,而你只看得到其中一套。**
 
@@ -33,7 +37,7 @@
 | 依据 | **默认配置下的实际可利用性** | 向量机械计算,不看你开没开那个功能 |
 | 在哪看 | `tomcat.apache.org/security-9.html` | Dependabot 直接推送给你 |
 
-29 条里有 **17 条两套评级差 2 级以上**,最极端的 CVE-2026-41293:官方 **Low**,GitHub **critical CVSS 9.8**。
+51 条里有 **23 条两套评级差 2 级以上**(另有 9 条 GitHub 尚未给出评级,不计入),最极端的 CVE-2026-41293:官方 **Low**,GitHub **critical CVSS 9.8**。
 
 > **这不是谁报错了。** 两套体系测量的本来就是不同的东西。
 > 但要判断「该不该现在就升」,你需要同时看到它们 —— 以及你有没有开那个功能。
@@ -70,12 +74,25 @@ java -jar tomcat-check.jar target/lib
 ## 🔴 请这样读它的输出
 
 - **「命中」= 你的版本落在官方 Affects 区间内**,不等于「已被利用」,也不等于「必然可利用」。
-  29 条里只有少数是默认配置即暴露,其余需要你显式开启某个功能(RewriteValve、DIGEST 认证、
-  AJP、WebDAV、集群通信……)。**请逐条对照触发条件。**
+  51 条里只有少数是默认配置即暴露,其余需要你显式开启某个功能(HTTP/2、WebSocket、RewriteValve、
+  DIGEST 认证、AJP、WebDAV、集群通信……)。**请逐条对照触发条件。**
+- **WebSocket 类条目只在扫到 `tomcat-embed-websocket` 时才算命中。** 内嵌形态下 WebSocket 实现
+  不在 `tomcat-embed-core` 里;你的应用如果把它排除掉了,这几条会列在「不适用」里并写明原因。
 - **「Dependabot 不会告警」不是说 GitHub 失职。** `unreviewed` 是正常流程状态。
 - **判定表只覆盖 2026 年公布的 CVE。** 没有命中不等于你的版本没问题。
 - 工具**不会**替你决定要不要升级 —— 它给的是做这个决定所需的三样东西:
   你装的是哪个版本、官方怎么评、以及触发条件是什么。
+
+## 2026-08 与 2026-09 两批(v0.2.0 补进)
+
+官方在 9.0.121 / 10.1.58 / 11.0.25 修了一批 10 条,在 9.0.122 / 10.1.60 / 11.0.26 又修了一批 12 条。
+其中一条值得单说:
+
+**CVE-2026-86350(官方 Important)是修 CVE-2026-41293 时引入的回归。** 它的受影响区间是
+9.0.118–9.0.121、10.1.55–10.1.59、11.0.22–11.0.25 —— 也就是 41293 的修复版自己。
+为了修 41293 升到这些版本的,需要再升一次。触发条件是启用了 HTTP/2。
+
+这两批 22 条里,19 条在 GitHub 上仍是 `unreviewed`(2026-10-13 读数)。
 
 ## 判定表怎么来的
 
@@ -110,7 +127,7 @@ python tools/gen_rules.py
 mvn clean package     # → target/tomcat-check.jar
 ```
 
-34 个测试。运行时零依赖,JUnit 仅测试期。
+39 个测试。运行时零依赖,JUnit 仅测试期。
 
 ## 许可
 

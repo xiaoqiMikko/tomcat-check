@@ -71,6 +71,30 @@ class ApplicabilityTest {
     }
 
     @Test
+    @DisplayName("WebSocket 条目:内嵌形态下没扫到 tomcat-embed-websocket 就不适用,理由要说清")
+    void websocketAbsentOnEmbedded() {
+        Cve c = cve("WEBSOCKET", true);
+        assertFalse(Applicability.applicable(c, true, false, false));
+        assertTrue(Applicability.reason(c, true, false, false).contains("tomcat-embed-websocket"));
+    }
+
+    @Test
+    @DisplayName("WebSocket 条目:扫到了就适用;独立安装自带 WebSocket,不看这个参数")
+    void websocketPresentOrStandalone() {
+        Cve c = cve("WEBSOCKET", true);
+        assertTrue(Applicability.applicable(c, true, false, true));
+        assertTrue(Applicability.applicable(c, false, false, false));
+        assertEquals("", Applicability.reason(c, false, false, false));
+    }
+
+    @Test
+    @DisplayName("非 WebSocket 条目不受 websocketHere 影响")
+    void websocketFlagOnlyTouchesWebsocketKind() {
+        assertTrue(Applicability.applicable(cve("HTTP2", true), true, false, false));
+        assertTrue(Applicability.applicable(cve("DEFAULT", true), true, false, false));
+    }
+
+    @Test
     @DisplayName("判定表里真实的集群条目走同一条路径")
     void realClusterEntries() {
         Cve c = CveTable.all().stream()

@@ -61,6 +61,31 @@ CONDITIONS = {
     "CVE-2026-43512": ("CONFIG", "仅当配置了 DIGEST 认证(此时未知用户提交密码 \"null\" 即可通过)"),
     "CVE-2026-43515": ("CONFIG", "仅当多个 security-constraint 对同一扩展名模式定义了 HTTP 方法约束"),
     "CVE-2026-55956": ("CONFIG", "仅当对 default servlet 配置了 security-constraint"),
+    # ── 2026-08 批(9.0.121 / 10.1.58 / 11.0.25 修)与 2026-09 批(9.0.122 / 10.1.60 / 11.0.26 修)──
+    # 2026-10-13 补。措辞逐条对照官方描述原文,原文没写前提的才允许落到 default。
+    # 🔴 Low 的也逐条标了:ASSERT4 只拦非 Low,而 Low 落到 default 会被读成「默认即中招」。
+    "CVE-2026-65182": ("CONFIG", "仅当较长路径的 security-constraint 写在更严格的较短子路径约束之前"),
+    "CVE-2026-65183": ("CONFIG", "仅当连接器监听 Unix Domain Socket(攻击者须是本机用户)"),
+    "CVE-2026-65637": ("TLS", "仅当启用 HTTP/2 且依赖严格 SNI 检查"),
+    "CVE-2026-65905": ("CONFIG", "仅当配置了 DIGEST 认证"),
+    "CVE-2026-65927": ("CONFIG", "仅当显式配置了 RewriteValve 且规则使用 [N] 标志"),
+    "CVE-2026-66422": ("CONFIG", "仅当 web.xml 里定义了 security-role-ref"),
+    "CVE-2026-68525": ("CONFIG", "仅当使用 FORM 认证,且 security-constraint 按 HTTP 方法区分(限 POST 不限 GET)"),
+    "CVE-2026-68569": ("CONFIG", "仅当 DataSourceRealm / JDBCRealm 搭配 CLIENT-CERT、SPNEGO 这类认证方式"),
+    "CVE-2026-68763": ("HTTP2", "仅当启用 HTTP/2"),
+    "CVE-2026-73180": ("WEBSOCKET", "仅当应用使用 WebSocket,且连接建立在已认证的 HTTP 会话之上"),
+    "CVE-2026-73581": ("TLS", "仅当使用 OpenSSL / OpenSSL-FFM TLS 实现、证书放在 keystore 且配置了 CRL"),
+    "CVE-2026-75973": ("CONFIG", "仅当 SimpleAuthConfigProvider 被配成默认 Jakarta Authentication provider 且多个 web 应用共用"),
+    "CVE-2026-76183": ("WEBSOCKET", "仅当应用有 WebSocket 端点,且对端点路径配置了 security-constraint"),
+    "CVE-2026-77756": ("CONFIG", "仅当 Tomcat 位于反向代理之后"),
+    "CVE-2026-77762": ("HTTP2", "仅当启用 HTTP/2"),
+    "CVE-2026-77791": ("WEBSOCKET", "仅当应用有 WebSocket 端点"),
+    "CVE-2026-78383": ("AJP", "仅当启用 AJP 连接器"),
+    "CVE-2026-78437": ("HTTP2", "仅当启用 HTTP/2"),
+    "CVE-2026-79677": ("WEBSOCKET", "仅当应用有 WebSocket 端点并使用异步写"),
+    "CVE-2026-86248": ("TLS", "仅当使用 FFM/panama OpenSSL、启用 CLIENT_CERT 认证并关闭了 OCSP soft-fail"),
+    "CVE-2026-86350": ("HTTP2", "仅当启用 HTTP/2"),
+    "CVE-2026-87022": ("WEBSOCKET", "仅当 WebSocket 启用了 per-message-deflate 压缩扩展"),
 }
 
 LINES = ["9", "10", "11"]
@@ -80,6 +105,8 @@ EXCLUDE_FROM_EMBED = {
     #    —— FFM 连接器在单独的 tomcat-coyote-ffm 构件里,内嵌版根本没有。
     #    不排除的话,工具会对 Spring Boot 用户报一条 CVSS 9.1 且他绝不可能中的洞。
     "CVE-2026-53434": ("panama", "FFM 连接器专属(tomcat-coyote-ffm),tomcat-embed-* 内不含"),
+    # 标题原文:"Fix for CVE-2026-34500 was incomplete. OCSP checks sometimes soft-fail with FFM ..."
+    "CVE-2026-86248": ("panama", "FFM/panama OpenSSL 专属,tomcat-embed-* 内无 panama 类"),
     "CVE-2026-50229": (None, "示例应用 webapps/examples,不在任何 jar 内"),
     "CVE-2026-66299": (None, "示例应用 webapps/examples,不在任何 jar 内"),
 }
@@ -314,6 +341,16 @@ for _cve, (_marker, _why) in EXCLUDE_FROM_EMBED.items():
 assert "encryptinterceptor" in _tribes, \
     "🔴 ASSERT6 失败:EncryptInterceptor 在 tribes 里也找不到 —— 类名或 jar 选错,排除依据不成立"
 print("   反向校验:EncryptInterceptor 确实在 tomcat-tribes 里 ✅")
+
+# ASSERT 6b:WEBSOCKET 类条目的适用性按「扫没扫到 tomcat-embed-websocket」判(见 Applicability),
+# 它的依据是 WebSocket 实现不在 embed-core 里、而在 embed-websocket 里 —— 每次重跑都下真 jar 重验。
+_WS = "org/apache/tomcat/websocket/"
+for _v, _blob in _embed.items():
+    assert _WS not in _blob, (
+        "🔴 ASSERT6b 失败:WebSocket 实现出现在 embed-core %s 里 —— WEBSOCKET 类的适用性判据已过时" % _v)
+_ws_jar = _entries("%s/embed/tomcat-embed-websocket/10.1.54/tomcat-embed-websocket-10.1.54.jar" % _B)
+assert _WS in _ws_jar, "🔴 ASSERT6b 失败:WebSocket 实现在 tomcat-embed-websocket 里也找不到"
+print("   WebSocket 实现:三条线 embed-core 内均无,在 tomcat-embed-websocket 里 ✅")
 
 
 # ────────────────────────── 生成 Java ──────────────────────────

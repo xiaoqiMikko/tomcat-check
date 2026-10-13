@@ -25,7 +25,7 @@ class CveTableTest {
     @Test
     @DisplayName("表不能是空的,且要覆盖三条版本线")
     void notEmpty() {
-        assertTrue(CveTable.all().size() >= 60,
+        assertTrue(CveTable.all().size() >= 150,
                 "判定表只有 " + CveTable.all().size() + " 条 —— 生成脚本可能解析失败了");
         Set<String> lines = CveTable.all().stream().map(Cve::line).collect(Collectors.toSet());
         assertTrue(lines.containsAll(Set.of("9", "10", "11")), "缺版本线:" + lines);
@@ -81,6 +81,46 @@ class CveTableTest {
         assertFalse(c.isEmpty());
         assertFalse(c.get(0).dependabotAlerts());
         assertEquals("unreviewed", c.get(0).ghType());
+    }
+
+    @Test
+    @DisplayName("2026-09 批:修 41293 引入的回归 86350 只落在修复版自己那几个版本上")
+    void regressionOf41293() {
+        List<Cve> l = byId("CVE-2026-86350");
+        assertEquals(3, l.size(), "86350 应三条线各一条");
+        assertEquals("Important", l.get(0).officialSev());
+        assertEquals("HTTP2", l.get(0).condKind());
+        for (Cve c : l) {
+            TomcatVersion low = TomcatVersion.parse(c.low());
+            // 回归的下限 = 41293 在同一条线上的上限再进一版(即 41293 的修复版)
+            Cve fixed = byId("CVE-2026-41293").stream()
+                    .filter(x -> x.line().equals(c.line())).findFirst().orElseThrow();
+            assertTrue(low.compareTo(TomcatVersion.parse(fixed.high())) > 0,
+                    c.line() + " 线:86350 下限 " + c.low() + " 应高于 41293 上限 " + fixed.high());
+            assertFalse(TomcatVersion.parse(fixed.high()).inRange(c.low(), c.high()),
+                    "41293 的受影响版本不该同时落在 86350 区间里");
+        }
+        assertEquals("9.0.118", l.stream().filter(c -> c.line().equals("9")).findFirst()
+                .orElseThrow().low());
+        assertEquals("10.1.59", l.stream().filter(c -> c.line().equals("10")).findFirst()
+                .orElseThrow().high());
+    }
+
+    @Test
+    @DisplayName("2026-08 / 09 两批:非默认前提的条目不许落到「默认配置即受影响」")
+    void newBatchesHaveConditions() {
+        for (String id : List.of("CVE-2026-65182", "CVE-2026-65183", "CVE-2026-65637",
+                "CVE-2026-65905", "CVE-2026-65927", "CVE-2026-66422", "CVE-2026-68525",
+                "CVE-2026-68569", "CVE-2026-68763", "CVE-2026-73180", "CVE-2026-73581",
+                "CVE-2026-75973", "CVE-2026-76183", "CVE-2026-77756", "CVE-2026-77762",
+                "CVE-2026-77791", "CVE-2026-78383", "CVE-2026-78437", "CVE-2026-79677",
+                "CVE-2026-86248", "CVE-2026-86350", "CVE-2026-87022")) {
+            List<Cve> l = byId(id);
+            assertEquals(3, l.size(), id + " 应三条线各一条");
+            assertFalse(l.get(0).defaultExposed(), id + " 不该标成默认即受影响");
+        }
+        // FFM 专属的那条必须对内嵌版排除(与 34500 同理)
+        assertFalse(byId("CVE-2026-86248").get(0).embedApplicable());
     }
 
     @Test

@@ -22,8 +22,22 @@ public final class Applicability {
      * @param clusterHere  同版本线上有没有扫到集群组件(tomcat-tribes / tomcat-catalina-ha)
      */
     public static boolean applicable(Cve cve, boolean embedded, boolean clusterHere) {
+        return applicable(cve, embedded, clusterHere, true);
+    }
+
+    /**
+     * @param websocketHere 同版本线上有没有扫到 {@code tomcat-embed-websocket}。
+     *                      只对内嵌形态有意义:WebSocket 实现不在 embed-core 里,
+     *                      在单独的 embed-websocket 里(gen_rules.py 的 ASSERT6b 每次下真 jar 重验);
+     *                      独立安装自带 {@code tomcat-websocket.jar},不看这个参数。
+     */
+    public static boolean applicable(Cve cve, boolean embedded, boolean clusterHere,
+                                     boolean websocketHere) {
         if ("CLUSTER".equals(cve.condKind())) {
             return clusterHere;
+        }
+        if ("WEBSOCKET".equals(cve.condKind()) && embedded && !websocketHere) {
+            return false;
         }
         if (embedded && !cve.embedApplicable()) {
             return false;
@@ -33,11 +47,19 @@ public final class Applicability {
 
     /** 不适用的原因;{@link #applicable} 为 true 时返回空串。 */
     public static String reason(Cve cve, boolean embedded, boolean clusterHere) {
-        if (applicable(cve, embedded, clusterHere)) {
+        return reason(cve, embedded, clusterHere, true);
+    }
+
+    public static String reason(Cve cve, boolean embedded, boolean clusterHere,
+                                boolean websocketHere) {
+        if (applicable(cve, embedded, clusterHere, websocketHere)) {
             return "";
         }
         if ("CLUSTER".equals(cve.condKind())) {
             return "未扫到同版本线的集群组件(tomcat-tribes / tomcat-catalina-ha)";
+        }
+        if ("WEBSOCKET".equals(cve.condKind())) {
+            return "未扫到同版本线的 tomcat-embed-websocket(WebSocket 实现不在 embed-core 里)";
         }
         return cve.excludeReason();
     }

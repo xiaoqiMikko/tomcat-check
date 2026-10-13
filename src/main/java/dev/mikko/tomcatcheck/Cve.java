@@ -25,7 +25,7 @@ public record Cve(
         String low,
         /** 受影响上限(含),官方 Affects 终点 */
         String high,
-        /** 触发条件分类:DEFAULT / CONFIG / TLS / CLUSTER / EXAMPLES / AJP / WEBDAV */
+        /** 触发条件分类:DEFAULT / CONFIG / TLS / CLUSTER / EXAMPLES / AJP / WEBDAV / HTTP2 / WEBSOCKET */
         String condKind,
         /** 触发条件说明(对照官方描述原文,未作外推) */
         String condText,

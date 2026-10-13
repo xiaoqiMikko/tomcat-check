@@ -101,6 +101,9 @@ public final class Main {
         // 不能拿 9.0 的 tribes 去证明 11.0 那套装了集群组件。
         Set<String> clusterLines = arts.stream().filter(Scanner.Artifact::cluster)
                 .map(a -> a.version().line()).collect(Collectors.toSet());
+        // WebSocket 同理按版本线看:内嵌形态下它是单独的 tomcat-embed-websocket。
+        Set<String> websocketLines = arts.stream().filter(Scanner.Artifact::websocket)
+                .map(a -> a.version().line()).collect(Collectors.toSet());
 
         for (Scanner.Artifact a : arts) {
             // 版本号由 embed-core / catalina 这类核心构件决定,其余构件同版本线不重复判定
@@ -129,7 +132,8 @@ public final class Main {
                     continue;
                 }
                 boolean clusterHere = clusterLines.contains(a.version().line());
-                if (Applicability.applicable(c, a.embedded(), clusterHere)) {
+                boolean websocketHere = websocketLines.contains(a.version().line());
+                if (Applicability.applicable(c, a.embedded(), clusterHere, websocketHere)) {
                     hit.add(c);
                 } else {
                     skipped.add(c);
@@ -153,10 +157,12 @@ public final class Main {
                         + (showAll ? "──" : "(加 --all 查看)──"));
                 if (showAll) {
                     boolean clusterHere = clusterLines.contains(a.version().line());
+                    boolean websocketHere = websocketLines.contains(a.version().line());
                     for (Cve c : skipped) {
                         out.println("   " + c.id() + "  " + c.title());
                         out.println("      不适用:"
-                                + Applicability.reason(c, a.embedded(), clusterHere));
+                                + Applicability.reason(c, a.embedded(), clusterHere,
+                                        websocketHere));
                     }
                 }
             }
@@ -176,7 +182,7 @@ public final class Main {
             out.println();
             out.println("  " + c.id() + "  " + c.title());
             out.printf("     评级:ASF 官方 %-9s │ GitHub %s%s%n",
-                    c.officialSev(), c.ghSev(),
+                    c.officialSev(), "unknown".equals(c.ghSev()) ? "尚未评级" : c.ghSev(),
                     c.ghScore() >= 0 ? String.format(" (CVSS %.1f)", c.ghScore()) : "");
             if (differ(c)) {
                 out.println("     ↑ 两套体系口径不同(官方按默认配置下的可利用性,CVSS 按向量机械计算),"
