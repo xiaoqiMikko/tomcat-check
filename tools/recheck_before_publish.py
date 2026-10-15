@@ -4,7 +4,7 @@ r"""第 6 注 tomcat-check 发文前事实复核。
 承重论据(任何一条失效,文章就变成错的):
   A. 那 6 条 advisory 仍是 `unreviewed` 且受影响包数为 0
   B. 另 3 条的坐标里仍然没有 tomcat-embed-*
-  C. 官方 2026 年条目数(29)、评级差 >=2 级的条数(17)没变
+  C. 官方 2026 年条目数(51)、评级差 >=2 级的条数(23,不计 GitHub 未评级)没变(10-15 更正前是 29 / 17)
 🔴 这些是**时效性**论据 —— GitHub 随时可能把 unreviewed 转成 reviewed。
    复核不过 → 停下改文案,不许「先发了再说」。
 """
@@ -74,20 +74,27 @@ for ln in ("9", "10", "11"):
         official.setdefault(m.group(3), m.group(1))
 
 y26 = {c: s for c, s in official.items() if c.startswith("CVE-2026")}
-print("  官方 2026 条目:%d(文案写的是 29)%s" % (len(y26), "✅" if len(y26) == 29 else " 🔴 变了!"))
-if len(y26) != 29:
-    fail.append("官方 2026 条目数从 29 变成 %d" % len(y26))
+# 2026-10-15 更正块挂上后,文案里的现值是 51 / 23(原文 08-06 的 29 / 17 已在更正块里注明是旧快照)
+TOTAL, GAP = 51, 23
+print("  官方 2026 条目:%d(文案写的是 %d)%s" % (len(y26), TOTAL, "✅" if len(y26) == TOTAL else " 🔴 变了!"))
+if len(y26) != TOTAL:
+    fail.append("官方 2026 条目数从 %d 变成 %d" % (TOTAL, len(y26)))
 
-gap = 0
+# GitHub 尚未评级(severity 为空 / unknown)的不算评级差 —— 2026-10-15 前它们落到默认值 9,被当成「差 >=2 级」计进去了
+gap = unrated = 0
 for c, off in y26.items():
     a = adv(c)
     if not a:
         continue
-    if abs(RANK.get(off.lower(), 9) - RANK.get((a.get("severity") or "").lower(), 9)) >= 2:
+    gh = (a.get("severity") or "").lower()
+    if gh not in RANK:
+        unrated += 1
+        continue
+    if abs(RANK[off.lower()] - RANK[gh]) >= 2:
         gap += 1
-print("  评级差 >=2 级:%d 条(文案写的是 17)%s" % (gap, "✅" if gap == 17 else " 🔴 变了!"))
-if gap != 17:
-    fail.append("评级差 >=2 级的条数从 17 变成 %d" % gap)
+print("  评级差 >=2 级:%d 条(文案写的是 %d;GitHub 未评级 %d 条不计)%s" % (gap, GAP, unrated, "✅" if gap == GAP else " 🔴 变了!"))
+if gap != GAP:
+    fail.append("评级差 >=2 级的条数从 %d 变成 %d" % (GAP, gap))
 
 print("\n" + "=" * 60)
 if fail:
